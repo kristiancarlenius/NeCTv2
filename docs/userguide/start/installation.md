@@ -21,14 +21,14 @@ If you don't have uv installed, follow the [uv installation guide](https://docs.
 ```bash
 uv venv --python=3.12
 source venv/bin/activate
-uv pip install git+https://github.com/haakonnese/nect[torch]
+uv pip install git+https://github.com/kristiancarlenius/NeCTv2[torch]
 uv pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch --no-build-isolation
 ```
 
 #### Custom PyTorch Version
 To use a specific PyTorch version (2.4-2.7) visit the [PyTorch Installation Page](https://pytorch.org/get-started/locally/) and install the desired PyTorch version into your uv environment. Then install NeCT with:
 ```bash
-uv pip install git+https://github.com/haakonnese/nect --no-build-isolation-package torch
+uv pip install git+https://github.com/kristiancarlenius/NeCTv2 --no-build-isolation-package torch
 uv pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch --no-build-isolation
 ```
 
@@ -38,7 +38,7 @@ uv pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings
 conda create -n nect python=3.12 -y
 conda activate nect
 conda install pytorch==2.5.1 torchvision==0.20.1 pytorch-cuda=12.4 lightning==2.1 conda-forge::opencv -c pytorch -c nvidia -c conda-forge -y
-pip install -v git+https://github.com/haakonnese/nect
+pip install -v git+https://github.com/kristiancarlenius/NeCTv2
 pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
 ```
 
