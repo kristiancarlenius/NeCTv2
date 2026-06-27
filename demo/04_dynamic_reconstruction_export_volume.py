@@ -1,0 +1,39 @@
+"""
+Demo 04: Reconstruct a dynamic volume and export volumes of the reconstruction. For more fine-grained control, look at the export_volumes function.""
+"""
+
+from pathlib import Path
+
+from nect.download_demo_data import download_demo_data, get_demo_data_path
+import nect
+import torch
+print(torch.__version__)
+print(torch.cuda.get_arch_list())
+print(torch.cuda.get_device_name(0))
+print(torch.cuda.current_device())
+print(torch.cuda.is_available())
+
+download_demo_data("SimulatedFluidInvasion")
+demo_dir = get_demo_data_path("SimulatedFluidInvasion")
+geometry = nect.Geometry.from_yaml(demo_dir / "geometry.yaml")
+reconstruction_path = nect.reconstruct(
+    geometry=geometry,
+    projections=demo_dir / "projections.npy",
+    quality="high",
+    mode="dynamic",
+    config_override={
+        "epochs": "3x",  # a multiplier of base-epochs. Base-epochs is: floor(49 / num_projections * max(nDetector))
+        "checkpoint_interval": 0,  # How often to save the model in seconds
+        "image_interval": 0,  # How often to save images in seconds
+        "plot_type": "XZ",  # XZ or XY, YZ
+        "encoder": {
+            "otype": "HashGrid",
+            "n_levels": 20,
+            "n_features_per_level": 4,
+            "log2_hashmap_size": 21,
+            "base_resolution": 16,
+            "max_resolution_factor": 2
+        },
+    },
+)
+nect.export_volumes(reconstruction_path, binning=3, avg_timesteps=5)
