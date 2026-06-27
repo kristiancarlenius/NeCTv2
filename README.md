@@ -1,6 +1,6 @@
 # NeCTv2: Neural Computed Tomography v2
 
-NeCTv2 extends the original [NeCT](https://github.com/andriikern/NeCT) with new encoder architectures that substantially reduce GPU memory requirements and improve reconstruction quality, along with a dedicated forward model for continuous-rotation (fly-scan) acquisition. It uses implicit neural representations powered by [`tiny-cuda-nn`](https://github.com/NVlabs/tiny-cuda-nn/) to reconstruct CT volumes directly from raw projection data, supporting both static 3D CT and dynamic 4D CT.
+NeCTv2 extends the original [NeCT](https://github.com/haakonnese/nect) with new encoder architectures that substantially reduce GPU memory requirements and improve reconstruction quality, along with a dedicated forward model for continuous-rotation (fly-scan) acquisition. It uses implicit neural representations powered by [`tiny-cuda-nn`](https://github.com/NVlabs/tiny-cuda-nn/) to reconstruct CT volumes directly from raw projection data, supporting both static 3D CT and dynamic 4D CT.
 
 Developed as a master's thesis at NTNU in collaboration with the CT lab at Equinor.
 
@@ -32,7 +32,7 @@ The lightweight MixedCubes variant runs on any CUDA-capable GPU with 6 GB of VRA
   </tr>
 </table>
 
-![NeCT Reconstruction Pipeline](docs/images/pipeline.png)
+![NeCT Reconstruction Pipeline](docs/images/nect_pipeline.png)
 
 ---
 
