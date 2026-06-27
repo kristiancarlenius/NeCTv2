@@ -1,24 +1,18 @@
-from pathlib import Path
+"""
+Demo 11: Dynamic reconstruction using QuadCubes with a large spatial encoder on the Bentheimer dataset.
+Uses separate spatial (n_levels=24) and temporal (n_levels=23) hash grids for high-resolution spacetime encoding.
+"""
+
+from nect.download_demo_data import download_demo_data, get_demo_data_path
 import nect
-import yaml 
 
-data_path = "/cluster/home/kristiac/NeCT/Datasets/bentheimer/"
+download_demo_data("Bentheimer")
+demo_dir = get_demo_data_path("Bentheimer")
+geometry = nect.Geometry.from_yaml(demo_dir / "geometry.yaml")
 
-config_file = Path(data_path) / "config.yaml"
-with open(config_file, "r") as f:
-    config = yaml.safe_load(f)
-config["img_path"] = str(Path(data_path) / "projections")
-tmp_config_file = Path(data_path) / "config_tmp.yaml"
-with open(tmp_config_file, "w") as f:
-    yaml.safe_dump(config, f)
-nect.export_dataset_to_npy(tmp_config_file, Path(data_path) / "projections.npy")
-
-geometry_file = Path(data_path) / "geometry.yaml"
-geometry = nect.Geometry.from_yaml(geometry_file)
-
-reconstruction_path_dynamic, _ = nect.reconstruct(
+reconstruction_path, _ = nect.reconstruct(
     geometry=geometry,
-    projections=str(Path(data_path) / "projections.npy"),
+    projections=demo_dir / "projections",
     quality="high",
     mode="dynamic",
     exp_name="splitquadcubes_large_spatial",

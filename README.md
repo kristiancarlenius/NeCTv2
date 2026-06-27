@@ -1,38 +1,36 @@
 # NeCTv2: Neural Computed Tomography v2
 
-NeCTv2 is an extended and improved implementation of NeCT, developed as a master's thesis at the Norwegian University of Science and Technology (NTNU) in collaboration with the CT lab at Equinor. It uses implicit neural representations (INR) — powered by [`tiny-cuda-nn`](https://github.com/NVlabs/tiny-cuda-nn/) — to reconstruct CT volumes from raw projection data, supporting both static 3D CT and dynamic 4D CT.
+NeCTv2 extends the original [NeCT](https://github.com/andriikern/NeCT) with new encoder architectures that substantially reduce GPU memory requirements and improve reconstruction quality, along with a dedicated forward model for continuous-rotation (fly-scan) acquisition. It uses implicit neural representations powered by [`tiny-cuda-nn`](https://github.com/NVlabs/tiny-cuda-nn/) to reconstruct CT volumes directly from raw projection data, supporting both static 3D CT and dynamic 4D CT.
+
+Developed as a master's thesis at NTNU in collaboration with the CT lab at Equinor.
+
+---
+
+## Results at a glance
+
+The original NeCT baseline requires approximately 45 GB of GPU memory and over 40 hours of training per dataset, restricting use to high-end server hardware. NeCTv2 changes that.
+
+| Architecture | PSNR at 24 h | VRAM | vs. baseline |
+|---|---|---|---|
+| QuadCubes (NeCT baseline) | 35.89 dB | 44.8 GB | — |
+| CombinedCubes `18_4_24_4_128` | 37.28 dB | 18.3 GB | +1.39 dB, −59% VRAM |
+| **MixedCubes `24_4_24_4_128`** | **37.73 dB** | **22.1 GB** | **+1.84 dB, −51% VRAM** |
+| MixedCubes `18_4_22_4_64` (lightweight) | 35.97 dB | 5.1 GB | ≈baseline, −89% VRAM |
+
+The lightweight MixedCubes variant runs on any CUDA-capable GPU with 6 GB of VRAM, making NeCT-class 4D-CT reconstruction accessible on consumer hardware for the first time. Full benchmark results are available in the [thesis](#licensing-and-citation).
 
 <table>
   <tr>
     <td>
-      <img src="docs/images/showcase1.gif" width="480">
-      <p>
-        Rendering of spontaneous imbibition in a Bentheimer sandstone reconstructed using NeCT. The brine flowing into the sample is shown in light blue, while the salt grains dissolving are presented in red.
-      </p>
+      <img src="docs/images/showcase1.gif" width="480" alt="Spontaneous imbibition in Bentheimer sandstone reconstructed with NeCT. Brine (light blue) fills the pore network while salt grains (red) dissolve.">
+      <p>Spontaneous imbibition in a Bentheimer sandstone reconstructed using NeCT. Brine (light blue) fills the pore network while salt grains (red) dissolve.</p>
     </td>
     <td>
-      <img src="docs/images/showcase2.gif" width="480">
-      <p>
-        Rendering of the dissolution of a salt grain. Three orthogonal slices visualize its temporal evolution. In the xz slice, it is possible to observe the brine coming into contact with the salt before it starts to dissolve.
-      </p>
+      <img src="docs/images/showcase2.gif" width="480" alt="Dissolution of a salt grain shown in three orthogonal slices. The xz slice shows brine contacting the grain before dissolution begins.">
+      <p>Dissolution of a salt grain shown across three orthogonal slices. The xz slice shows brine coming into contact with the grain before dissolution begins.</p>
     </td>
   </tr>
 </table>
-
-<p align="center">
-    <a href="https://github.com/kristiancarlenius/NeCTv2" target="_blank">
-        <img src="https://img.shields.io/badge/NeCTv2%20Repository-blueviolet?style=for-the-badge&logo=github" alt="NeCTv2 Repository"/>
-    </a>
-</p>
-
-- [What's new in v2](#whats-new-in-v2)
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [Models](#models)
-- [Demo](#demo)
-- [Data](#data)
-- [GUI](#gui)
-- [Licensing and Citation](#licensing-and-citation)
 
 ![NeCT Reconstruction Pipeline](docs/images/pipeline.png)
 
@@ -40,35 +38,43 @@ NeCTv2 is an extended and improved implementation of NeCT, developed as a master
 
 ## What's new in v2
 
-NeCTv2 builds on the original NeCT with a set of architectural and workflow improvements developed during a master's thesis:
+- **MixedCubes and CombinedCubes** — two new dynamic encoder architectures that outperform the QuadCubes baseline on reconstruction quality, memory, and training speed simultaneously. See [Models](#models) for details.
+- **Spatial-heavy QuadCubes** — non-uniform capacity allocation within the QuadCubes architecture that demonstrates the spatial-temporal asymmetry and already outperforms the uniform baseline at lower VRAM.
+- **Continuous scanning support** (`reconstruct_continious_scan`) — dedicated trainer for fly-scan geometries where the sample rotates continuously during each exposure, with a K-step midpoint approximation of the resulting angular averaging integral.
+- **Static-to-dynamic initialisation** (`IniTrainer`) — pre-train a fast static `hash_grid` model and transfer its weights into a dynamic model, giving the reconstruction a warm start and faster early convergence.
+- **Zarr export** (`export_volume_zarr`) — compressed chunked volume export alongside TIFF.
+- **Richer configuration** — fine-grained control over warm-up, gradient accumulation (`accumulation_steps`), dampening factors (`damp_multi`), and adaptive detector downsampling during training.
 
-- **Extended model zoo** — New dynamic architectures: `quadcubes`, `sexcubes`, `singlecube`, `combinedcubes`, `mixedcubes`, and transformer/U-Net hybrid variants (`quadcubes_transformer`, `sexcubes_unet`, etc.)
-- **Static-to-dynamic initialization** (`IniTrainer`) — Pre-train a fast static `hash_grid` model and transfer its weights into a `quadcubes` dynamic model, giving the dynamic reconstruction a warm start and faster convergence
-- **Continuous scanning support** (`reconstruct_continious_scan`) — Dedicated trainer for helical / continuously rotating scan geometries
-- **Zarr export** (`export_volume_zarr`) — Compressed chunked volume export in addition to TIFF
-- **Richer configuration** — Fine-grained control over `w0` warm-up, gradient accumulation (`accumulation_steps`), dampening factors (`damp_multi`), and more
-- **Improved sampling** — Adaptive detector downsampling schedule and flexible points-per-ray curriculum during training
+---
+
+## Hardware requirements
+
+| Configuration | Minimum VRAM | Example GPU |
+|---|---|---|
+| Lightweight MixedCubes `18_4_22_4_64` | 6 GB | GTX 1060, RTX 4060 |
+| Best MixedCubes `24_4_24_4_128` | 24 GB | RTX 3090, RTX 4090 |
+| Best CombinedCubes `24_4_24_6_128` | 26 GB | RTX 3090, RTX 4090 |
+| NeCT baseline QuadCubes | 45 GB | A100 80 GB, H100 |
+
+All configurations require CUDA 12.x.
 
 ---
 
 ## Installation
 
-NeCTv2 has been tested on **Windows** and **Linux** with the following dependencies:
+Tested on **Windows** and **Linux** with the following dependencies:
 
-| Package         | Version           | Notes              |
-|-----------------|-------------------|--------------------|
-| python          | 3.11 \| 3.12      |                    |
-| pytorch         | 2.4 – 2.7         |                    |
-| CUDA            | 12.X              |                    |
-| CMake (Linux)   | 3.24              | For tiny-cuda-nn   |
-| C++17 (Windows) |                   | For tiny-cuda-nn   |
+| Package | Version | Notes |
+|---|---|---|
+| Python | 3.11 or 3.12 | |
+| PyTorch | 2.4 – 2.7 | |
+| CUDA | 12.x | |
+| CMake (Linux) | 3.24+ | Required for tiny-cuda-nn |
+| C++17 (Windows) | | Required for tiny-cuda-nn |
 
-> **Recommended:** Use [conda](https://docs.anaconda.com/free/anaconda/install/) or [uv](https://docs.astral.sh/uv/getting-started/installation/) to manage your Python environment.
->
-> - For video export with the `avc1` codec, use conda. With uv, video export falls back to `mp4v`.
-> - Tested with `python=3.11, 3.12` and `pytorch>=2.4,<2.8`.
+> Use [conda](https://docs.anaconda.com/free/anaconda/install/) or [uv](https://docs.astral.sh/uv/getting-started/installation/) to manage your environment. For video export with the `avc1` codec, use conda. With uv, export falls back to `mp4v`.
 
-**Note:** Ensure `PATH` and `LD_LIBRARY_PATH` include the CUDA binaries as described in [tiny-cuda-nn](https://github.com/NVlabs/tiny-cuda-nn/). Building binaries for both `tiny-cuda-nn` and NeCTv2 may take several minutes.
+Ensure `PATH` and `LD_LIBRARY_PATH` include the CUDA binaries as described in the [tiny-cuda-nn documentation](https://github.com/NVlabs/tiny-cuda-nn/). Building `tiny-cuda-nn` may take several minutes.
 
 ### uv
 
@@ -76,15 +82,6 @@ NeCTv2 has been tested on **Windows** and **Linux** with the following dependenc
 uv venv --python=3.12
 source venv/bin/activate          # Windows: venv\Scripts\activate
 uv pip install -e .[torch]
-uv pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch --no-build-isolation
-```
-
-#### Custom PyTorch version
-
-Visit the [PyTorch Installation Page](https://pytorch.org/get-started/locally/) to install a specific version, then:
-
-```bash
-uv pip install -e . --no-build-isolation-package torch
 uv pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch --no-build-isolation
 ```
 
@@ -100,10 +97,10 @@ pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/to
 
 ### Multiple CUDA compute capabilities
 
-Set these environment variables **before** installing to build for multiple GPU generations (60=P100, 70=V100, 80=A100, 90=H100):
+Set these before installing to build for multiple GPU generations:
 
 ```bash
-export CUDA_ARCHITECTURES="60;70;80;90"
+export CUDA_ARCHITECTURES="60;70;80;90"   # P100, V100, A100, H100
 export CMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}
 export TCNN_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}
 export TORCH_CUDA_ARCH_LIST="6.0 7.0 8.0 9.0"
@@ -134,13 +131,13 @@ geometry = nect.Geometry(
 
 volume = nect.reconstruct(
     geometry=geometry,
-    projections="path/to/projections.npy",  # [nProjections, height, width] or a directory of images
+    projections="path/to/projections.npy",
     quality="medium",
 )
 np.save("volume.npy", volume)
 ```
 
-### Dynamic (4D) CT
+### Dynamic (4D) CT with MixedCubes
 
 ```python
 import nect
@@ -152,21 +149,22 @@ reconstruction_path = nect.reconstruct(
     projections="path/to/projections.npy",
     quality="high",
     mode="dynamic",
+    model="mixedcubes",
     exp_name="my_experiment",
 )
 nect.export_video(reconstruction_path, add_scale_bar=True, acquisition_time_minutes=60)
 ```
 
-### Static-to-dynamic initialization (NeCTv2)
+### Static-to-dynamic initialisation
 
-Pre-train a static `hash_grid` model, then warm-start a dynamic `quadcubes` model from it:
+Pre-train a static model, then warm-start a dynamic reconstruction from it for faster early convergence:
 
 ```python
 import nect
 
 geometry = nect.Geometry.from_yaml("path/to/geometry.yaml")
 
-# Step 1 – static reconstruction
+# Step 1 — fast static reconstruction
 static_path, _ = nect.reconstruct(
     geometry=geometry,
     projections="path/to/projections.npy",
@@ -175,12 +173,13 @@ static_path, _ = nect.reconstruct(
     exp_name="static_init",
 )
 
-# Step 2 – dynamic reconstruction initialized from the static model
+# Step 2 — dynamic reconstruction initialised from the static model
 nect.reconstruct(
     geometry=geometry,
     projections="path/to/projections.npy",
     quality="high",
     mode="dynamic",
+    model="mixedcubes",
     exp_name="dynamic_from_static",
     static_init=static_path,
 )
@@ -192,59 +191,44 @@ nect.reconstruct(
 
 ### Static
 
-| Model       | Description                                    |
-|-------------|------------------------------------------------|
-| `hash_grid` | Multi-resolution hash grid (default, fast)     |
-| `kplanes`   | K-Planes decomposition                         |
-| `tricubes`  | Triplane hash grid variant                     |
+| Model | Description |
+|---|---|
+| `hash_grid` | Multiresolution hash grid — fast, memory-efficient, recommended default |
 
 ### Dynamic (4D CT)
 
-| Model                     | Description                                                                 |
-|---------------------------|-----------------------------------------------------------------------------|
-| `quadcubes`               | Four-cube multi-resolution hash grid for spacetime (primary dynamic model)  |
-| `sexcubes`                | Six-cube variant for higher-capacity spacetime encoding                     |
-| `singlecube`              | Lightweight single-cube dynamic model                                       |
-| `combinedcubes`           | Combined static + dynamic hash grid                                         |
-| `mixedcubes`              | Mixed resolution cubes                                                      |
-| `double_hash_grid`        | Dual hash grid for dynamic scenes                                           |
-| `kplanes_dynamic`         | K-Planes with temporal planes                                               |
-| `hypercubes`              | Hypercube grid for high-dimensional encoding                                |
-| `quadcubes_transformer`   | QuadCubes with transformer decoder                                          |
-| `quadcubes_unet`          | QuadCubes with U-Net decoder                                                |
-| `sexcubes_transformer`    | SexCubes with transformer decoder                                           |
-| `sexcubes_unet`           | SexCubes with U-Net decoder                                                 |
+| Model | Description |
+|---|---|
+| `quadcubes` | Four 3D hash encoders covering all triplets of the space-time coordinates — the original NeCT architecture and the baseline for all comparisons |
+| `splitcubes` | QuadCubes with a larger spatial encoder and smaller temporal encoders, exploiting the spatial-temporal asymmetry within the original architecture. Outperforms the uniform baseline at lower VRAM with no structural changes |
+| `combinedcubes` | One large 3D spatial hash encoder plus three collision-free 2D temporal hash encoders. Reduces VRAM by roughly 60% relative to QuadCubes while improving reconstruction quality |
+| `mixedcubes` | One 3D spatial hash encoder plus three fully dense 2D temporal grids. Best reconstruction quality of any architecture at the 24-hour wall-clock mark, fits within 24 GB VRAM, and scales down to 5 GB for lightweight use — **recommended for most workflows** |
 
 ---
 
 ## Demo
 
-Demo scripts are in the [`demo/`](./demo/) folder. Projection data is downloaded automatically on first run.
+Demo scripts are in the [`demo/`](./demo/) folder. Projection data is downloaded automatically from [Zenodo](https://zenodo.org/records/16448474) on first run.
 
-| Script | Description |
-|--------|-------------|
-| `00_static_reconstruct_from_file.py` | Static reconstruction from a `.npy` file |
-| `01_static_reconstruct_from_array.py` | Static reconstruction from a NumPy array |
-| `02_geometry_load.py` | Load geometry from YAML |
-| `03_dynamic_reconstruction_video.py` | Dynamic reconstruction with video export |
-| `04_dynamic_reconstruction_export_volume.py` | Dynamic reconstruction with volume export |
-| `05_parallel_beam.py` | Parallel beam geometry |
-| `06_export_video_projections.py` | Export video from projections |
-| `07_reconstruct_from_cfg_file.py` | Reconstruction via config file |
-| `08_static_trainer.py` | Advanced static trainer configuration |
-| `09_continious_scan.py` | Continuous scanning reconstruction |
+| Script | Dataset | Description |
+|---|---|---|
+| `00_static_reconstruct_from_file.py` | Carp-cone | Static reconstruction from a `.npy` file |
+| `01_static_reconstruct_from_array.py` | Carp-cone | Static reconstruction from a NumPy array |
+| `02_geometry_load.py` | Carp-cone | Load geometry from YAML |
+| `03_dynamic_reconstruction_video.py` | SimulatedFluidInvasion | Dynamic reconstruction with video export |
+| `04_dynamic_reconstruction_export_volume.py` | SimulatedFluidInvasion | Dynamic reconstruction with volume export |
+| `05_parallel_beam.py` | Carp-parallel | Parallel beam geometry |
+| `06_export_video_projections.py` | SimulatedFluidInvasion | Export video from projections |
+| `07_reconstruct_from_cfg_file.py` | Bentheimer | Reconstruction via config YAML |
+| `08_continious_scan.py` | Custom | Continuous-scan reconstruction (requires a continuous-scan dataset) |
+| `09_combinedcubes.py` | Bentheimer | Dynamic reconstruction with CombinedCubes |
+| `10_mixedcubes.py` | Bentheimer | Dynamic reconstruction with MixedCubes |
 
 ---
 
 ## Data
 
-All projection data from the dynamic experiments are available at [Zenodo](https://zenodo.org/records/16448474).
-
----
-
-## GUI
-
-The NeCT GUI uses PyQt5 (GPL licensed) and lives in a separate repository.
+All projection data from the dynamic experiments are available on [Zenodo](https://zenodo.org/records/16448474).
 
 ---
 
@@ -252,6 +236,15 @@ The NeCT GUI uses PyQt5 (GPL licensed) and lives in a separate repository.
 
 This project is licensed under the **MIT License**.
 
-A master's thesis project at NTNU in collaboration with the CT lab at Equinor.
+If you use NeCTv2 in your research, please cite:
 
-If you use NeCTv2 in your research, please cite: **(Will be added)**
+```bibtex
+@mastersthesis{carlenius2025nectv2,
+  author  = {Carlenius, Kristian Gautefall},
+  title   = {{NeCTv2}: Optimizing Implicit Neural Representations for Discrete
+             and Continuous {4D} Computed Tomography of Flow in Porous Media},
+  school  = {Norwegian University of Science and Technology ({NTNU})},
+  year    = {2025},
+  url     = {https://github.com/kristiancarlenius/NeCTv2},
+}
+```

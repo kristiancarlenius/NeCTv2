@@ -1,33 +1,23 @@
+"""
+Demo 08: Dynamic reconstruction for a continuously rotating (helical) scan using MixedCubes.
+
+This demo requires a custom dataset — set data_path to a directory containing:
+  - geometry.yaml       scan geometry
+  - projections.npy     projection stack [N, H, W]
+
+The continuous scan mode reconstructs a scene that evolves during a single, uninterrupted
+rotation rather than a sequence of full 360° sweeps.
+"""
+
 from pathlib import Path
-import yaml
-import numpy as np
 import nect
-import torch
-from nect.config import MLPNetConfig
 
-print(torch.__version__)
-print(torch.cuda.get_arch_list())
-print(torch.cuda.get_device_name(0))
-print(torch.cuda.current_device())
-print(torch.cuda.is_available())
+data_path = Path("path/to/continious_scan_dataset")
+geometry = nect.Geometry.from_yaml(data_path / "geometry.yaml")
 
-data_path = "/cluster/home/kristiac/NeCT/Datasets/continious_scan_dyn/"
-
-config_file = Path(data_path) / "config.yaml"
-with open(config_file, "r") as f:
-    config = yaml.safe_load(f)
-config["img_path"] = str(Path(data_path) / "projections")
-tmp_config_file = Path(data_path) / "config_tmp.yaml"
-with open(tmp_config_file, "w") as f:
-    yaml.safe_dump(config, f)
-nect.export_dataset_to_npy(tmp_config_file, Path(data_path) / "projections.npy")
-
-geometry_file = Path(data_path) / "geometry_4fps_11000.yaml"
-geometry = nect.Geometry.from_yaml(geometry_file)
-
-reconstruction_path_dynamic, _ = nect.reconstruct_continious_scan(
+reconstruction_path, _ = nect.reconstruct_continious_scan(
     geometry=geometry,
-    projections=str(Path(data_path) / "proj_4fps_11000.npy"),
+    projections=data_path / "projections.npy",
     quality="high",
     mode="dynamic",
     exp_name="dynamic_continious",
@@ -38,19 +28,19 @@ reconstruction_path_dynamic, _ = nect.reconstruct_continious_scan(
         "plot_type": "XZ",
         "base_lr": 0.001,
         "warmup": {
-            "steps": 1400*10,
+            "steps": 1400 * 10,
             "lr0": 0.001,
         },
         "encoder": {
             "otype": "HashGrid",
             "n_levels": 18,
-            "n_features_per_level": 2,
+            "n_features_per_level": 4,
             "log2_hashmap_size": 23,
             "base_resolution": 16,
             "max_resolution_factor": 2,
         },
         "encoder_2d": {
-            "n_levels": 11,
+            "n_levels": 12,
             "n_features_per_level": 4,
             "base_resolution": 16,
             "per_level_scale": 1.5,
@@ -64,11 +54,9 @@ reconstruction_path_dynamic, _ = nect.reconstruct_continious_scan(
             "include_identity": False,
         },
         "tv_spatial": 1e-4,
-        "accumulation_steps": 1,
+        "accumulation_steps": 4,
         "continous_scanning": True,
-        
     },
     enc_arc="mixedcubes",
-    memvstime="batch",)
-
-print(reconstruction_path_dynamic, _)
+    memvstime="batch",
+)

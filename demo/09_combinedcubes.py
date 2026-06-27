@@ -1,29 +1,19 @@
-from pathlib import Path
-import yaml
-import numpy as np
-import nect
-import torch 
+"""
+Demo 09: Dynamic reconstruction using the CombinedCubes architecture on the Bentheimer dataset.
+CombinedCubes couples a static spatial hash grid with a dynamic temporal grid.
+"""
+
+from nect.download_demo_data import download_demo_data, get_demo_data_path
 from nect.config import MLPNetConfig
+import nect
 
-data_path = "/cluster/home/kristiac/NeCT/Datasets/bentheimer/"
+download_demo_data("Bentheimer")
+demo_dir = get_demo_data_path("Bentheimer")
+geometry = nect.Geometry.from_yaml(demo_dir / "geometry.yaml")
 
-config_file = Path(data_path) / "config.yaml"
-with open(config_file, "r") as f:
-    config = yaml.safe_load(f)
-config["img_path"] = str(Path(data_path) / "projections")
-tmp_config_file = Path(data_path) / "config_tmp.yaml"
-with open(tmp_config_file, "w") as f:
-    yaml.safe_dump(config, f)
-nect.export_dataset_to_npy(tmp_config_file, Path(data_path) / "projections.npy")
-
-geometry_file = Path(data_path) / "geometry.yaml"
-geometry = nect.Geometry.from_yaml(geometry_file)
-
-
-
-reconstruction_path_dynamic, _ = nect.reconstruct(
+reconstruction_path, _ = nect.reconstruct(
     geometry=geometry,
-    projections=str(Path(data_path) / "projections.npy"),
+    projections=demo_dir / "projections",
     quality="high",
     mode="dynamic",
     exp_name="combinedcubes",
@@ -34,7 +24,7 @@ reconstruction_path_dynamic, _ = nect.reconstruct(
         "plot_type": "XZ",
         "base_lr": 0.0001,
         "warmup": {
-            "steps": 1400*10,
+            "steps": 1400 * 10,
             "lr0": 0.0001,
         },
         "encoder": {
@@ -58,7 +48,5 @@ reconstruction_path_dynamic, _ = nect.reconstruct(
         "n_levels_temporal": 18,
     },
     enc_arc="combinedcubes",
-    )
-#hust å teste med 23_4_24, 24_4_23, 22_4_22, ect.
+)
 
-print(reconstruction_path_dynamic, _)
